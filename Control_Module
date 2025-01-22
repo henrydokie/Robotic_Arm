@@ -1,23 +1,37 @@
-#include <Servo.h> // Include the Servo library
+#include <Servo.h>
 
-Servo myServo; // Create a Servo object
+Servo myServo;
+
+const int currentPin = A0; // Pin connected to the current sensor
+const float sensitivity = 0.185; // ACS712 sensitivity (185mV per Amp for 5A version)
+const float offset = 2.5; // Offset voltage at 0 current (in volts)
+const int servoPin = 9;
 
 void setup() {
-  myServo.attach(9); // Attach the servo to Pin 9
-  Serial.begin(9600); // Start serial communication for debugging
-  Serial.println("Servo Test Initialized");
+  Serial.begin(9600);
+  myServo.attach(servoPin);
+  Serial.println("Force Feedback Setup Initialized");
 }
 
 void loop() {
-  // Move the servo to 0 degrees
-  myServo.write(0);
-  delay(1000); // Wait 1 second
-
-  // Move the servo to 90 degrees
+  // Move the servo to a position
   myServo.write(90);
-  delay(1000); // Wait 1 second
 
-  // Move the servo to 180 degrees
-  myServo.write(180);
-  delay(1000); // Wait 1 second
+  // Measure current
+  int rawValue = analogRead(currentPin);
+  float voltage = (rawValue / 1024.0) * 5.0; // Convert to voltage (5V reference)
+  float current = (voltage - offset) / sensitivity; // Calculate current in Amps
+
+  // Print current draw
+  Serial.print("Current: ");
+  Serial.print(current, 3); // Display 3 decimal places
+  Serial.println(" A");
+
+  // Force feedback: If current exceeds threshold, stop the servo
+  if (current > 0.5) { // Example threshold of 0.5A
+    myServo.write(0); // Stop the servo
+    Serial.println("Force limit reached, stopping servo!");
+  }
+
+  delay(100);
 }
