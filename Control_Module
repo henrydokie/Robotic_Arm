@@ -1,33 +1,58 @@
-#include <Servo.h>
+#include <arduinoFFT.h> // Include the FFT library
+#include <Servo.h>      // Include the Servo library
 
-Servo myServo;
+#define SAMPLES 64         // Must be a power of 2
+#define SAMPLING_FREQUENCY 1000 // Hz, adjust based on your signal
 
-const int currentPin = A0; // Pin connected to the current sensor
-const float sensitivity = 0.185; // ACS712 sensitivity (185mV per Amp for 5A version)
-const float offset = 2.5; // Offset voltage at 0 current (in volts)
-const int servoPin = 9;
+ArduinoFFT<double> FFT = ArduinoFFT<double>(); // Specify the template type
+Servo myServo; // Create a Servo object
+
+unsigned int samplingPeriod;
+unsigned long microseconds;
+double vReal[SAMPLES]; // Array to hold real values
+double vImag[SAMPLES]; // Array to hold imaginary values
+
+const int currentPin = A0; // Analog pin for current sensor
+const int servoPin = 9;    // Pin connected to the servo motor
 
 void setup() {
   Serial.begin(9600);
-  myServo.attach(servoPin);
-  Serial.println("Waveform Display Setup Initialized");
+  myServo.attach(servoPin); // Attach the servo motor to the specified pin
+  samplingPeriod = round(1000000 * (1.0 / SAMPLING_FREQUENCY));
+  Serial.println("FFT with Servo Control Setup Initialized");
 }
 
 void loop() {
-  // Move the servo to random positions
+  // Move the servo to different angles
   for (int angle = 0; angle <= 180; angle += 30) {
-    myServo.write(angle);
-    delay(500);
+    myServo.write(angle); // Move the servo to the desired angle
+    delay(500);           // Wait for the servo to reach the position
 
-    // Measure current
-    int rawValue = analogRead(currentPin);
-    float voltage = (rawValue / 1024.0) * 5.0; // Convert to voltage (5V reference)
-    float current = (voltage - offset) / sensitivity; // Calculate current in Amps
+    // Step 1: Collect Samples
+    for (int i = 0; i < SAMPLES; i++) {
+      microseconds = micros(); // Record the start time
+      vReal[i] = analogRead(currentPin) * (5.0 / 1024.0); // Convert to voltage
+      vImag[i] = 0; // FFT requires an imaginary part; set to 0 for real signals
+      while (micros() - microseconds < samplingPeriod) {
+        // Wait for the next sampling period
+      }
+    }
 
-    // Send data to Serial for plotting
-    Serial.print("Angle: ");
-    Serial.print(angle);
-    Serial.print(", Current: ");
-    Serial.println(current, 3); // Display current with 3 decimal places
+    // Step 2: Perform FFT
+    FFT.windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD); // Apply a window function
+    FFT.compute(vReal, vImag, SAMPLES, FFT_FORWARD); // Perform FFT
+    FFT.complexToMagnitude(vReal, vImag, SAMPLES); // Compute magnitudes
+
+    // Step 3: Output Frequency Data
+    Serial.print("Servo Angle: ");
+    Serial.println(angle); // Print the current servo position
+    for (int i = 0; i < (SAMPLES / 2); i++) {
+      double frequency = (i * 1.0 * SAMPLING_FREQUENCY) / SAMPLES; // Calculate frequency
+      Serial.print(frequency);
+      Serial.print(" Hz: ");
+      Serial.println(vReal[i], 6); // Magnitude at this frequency
+    }
+
+    delay(1000); // Pause before moving to the next angle
   }
 }
